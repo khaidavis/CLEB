@@ -14,29 +14,29 @@ public class ReservationController {
     private final ReservationRepository reservationRepository;
     private final ReservationService reservationService;
 
-    public ReservationController(ReservationRepository reservationRepository,
-                                 ReservationService reservationService) {
+    public ReservationController(ReservationRepository reservationRepository, ReservationService reservationService) {
         this.reservationRepository = reservationRepository;
         this.reservationService = reservationService;
     }
 
-    // ADMIN only (enforced in SecurityConfig)
     @GetMapping
-    public List<ReservationResponse> getAllReservations() {
-        return reservationRepository.findAll().stream().map(ReservationResponse::from).toList();
-    }
-
-    // Any logged-in user: only their own bookings
-    @GetMapping("/mine")
-    public List<ReservationResponse> mine(Authentication auth) {
-        return reservationRepository.findByUserEmailOrderByStartTimeDesc(auth.getName())
-                .stream().map(ReservationResponse::from).toList();
+    public List<Reservation> getAllReservations() {
+        return reservationRepository.findAll();
     }
 
     @PostMapping
-    public ReservationResponse create(@RequestBody BookingRequest body, Authentication auth) {
-        return ReservationResponse.from(
-                reservationService.book(auth.getName(), body.resourceId(), body.startTime(), body.endTime()));
+    public Reservation create(@RequestBody BookingRequest body, Authentication auth) {
+        return reservationService.book(auth.getName(), body.resourceId(), body.startTime(), body.endTime());
+    }
+
+    @PostMapping("/{id}/approve")
+    public Reservation approve(@PathVariable Long id, Authentication auth) {
+        return reservationService.decide(id, auth.getName(), true);
+    }
+
+    @PostMapping("/{id}/reject")
+    public Reservation reject(@PathVariable Long id, Authentication auth) {
+        return reservationService.decide(id, auth.getName(), false);
     }
 
     public record BookingRequest(Long resourceId, Instant startTime, Instant endTime) {}

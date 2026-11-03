@@ -29,14 +29,16 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors(Customizer.withDefaults())      // <-- turn CORS on, using the bean below
+            .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
+                .requestMatchers("/api/users/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST,   "/api/labs/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/labs/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/reservations").hasRole("ADMIN")
-		.anyRequest().authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/reservations/*/approve", "/api/reservations/*/reject")
+                    .hasAnyRole("TECHNICIAN", "ADMIN")
+                .anyRequest().authenticated()
             )
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .httpBasic(h -> h.disable())
@@ -46,12 +48,11 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // CORS rules: allow the frontend origin (:3000) to call this API.
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of("http://localhost:3000"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
