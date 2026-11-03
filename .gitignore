@@ -1,0 +1,29 @@
+# --- Secrets (the important part) ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# --- Java / Spring Boot ---
+target/
+*.class
+*.jar
+.gradle/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# --- IDE / OS ---
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+logs/
+*.log

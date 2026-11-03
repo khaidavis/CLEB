@@ -1,0 +1,115 @@
+# =============================================================================
+# Local development stack.
+#
+# Layer 1 (now):      database + db admin UI
+# Layer 2 (next):     backend  (Spring Boot)
+# Layer 3 (after):    frontend (Next.js)
+#
+# Services are added one at a time on purpose. Every service you add is another
+# thing that can break; adding them together means you never know which one did.
+#
+# Start:   docker compose up -d
+# Stop:    docker compose down
+# Reset:   docker compose down -v      <-- the -v DELETES all database data
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — the single source of truth for the whole platform.
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine # alpine = small image, faster pulls
+    container_name: platform-db
+    restart: unless-stopped
+
+    environment:
+      # Read from the .env file sitting next to this file.
+      # Credentials NEVER get hardcoded here — this file goes into Git, .env does not.
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      # host:container — lets tools on your machine (DBeaver, psql, Spring Boot
+      # running outside Docker) reach the DB at localhost:5432
+      - "${POSTGRES_PORT:-5432}:5432"
+
+    volumes:
+      # Named volume = your data survives `docker compose down`.
+      # Without this, every restart wipes the database.
+      - db_data:/var/lib/postgresql/data
+
+    healthcheck:
+      # The backend must not boot before Postgres is actually accepting
+      # connections. "Container started" and "database ready" are not the same
+      # moment — this is the #1 cause of mystery connection-refused errors.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+    networks:
+      - platform-net
+
+  # ---------------------------------------------------------------------------
+  # Adminer — lightweight web UI for inspecting the database.
+  # Think MySQL Workbench, but browser-based and disposable.
+  # Visit http://localhost:8081 once the stack is up.
+  # ---------------------------------------------------------------------------
+  adminer:
+    image: adminer:latest
+    container_name: platform-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - platform-net
+
+  # ---------------------------------------------------------------------------
+  # LAYER 2 — Spring Boot backend. Commented out until it exists.
+  # ---------------------------------------------------------------------------
+  # backend:
+  #   build:
+  #     context: ./backend
+  #   container_name: platform-backend
+  #   environment:
+  #     # NOTE: inside the Docker network the host is "db", NOT "localhost".
+  #     # Containers each have their own localhost. This trips up everyone once.
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+  #     SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+  #     SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+  #     JWT_SECRET: ${JWT_SECRET}
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   networks:
+  #     - platform-net
+
+  # ---------------------------------------------------------------------------
+  # LAYER 3 — Next.js frontend. Commented out until it exists.
+  # ---------------------------------------------------------------------------
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #   container_name: platform-frontend
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:8080
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - platform-net
+
+volumes:
+  db_data:
+
+networks:
+  platform-net:
+    driver: bridge
