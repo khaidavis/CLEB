@@ -1,5 +1,6 @@
 package com.platform.backend.reservation;
 
+import com.platform.backend.notification.NotificationService;
 import com.platform.backend.resource.Resource;
 import com.platform.backend.resource.ResourceRepository;
 import com.platform.backend.user.Role;
@@ -19,13 +20,16 @@ public class ReservationService {
     private final ReservationRepository reservationRepository;
     private final ResourceRepository resourceRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     public ReservationService(ReservationRepository reservationRepository,
                               ResourceRepository resourceRepository,
-                              UserRepository userRepository) {
+                              UserRepository userRepository,
+                              NotificationService notificationService) {
         this.reservationRepository = reservationRepository;
         this.resourceRepository = resourceRepository;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -47,11 +51,12 @@ public class ReservationService {
         reservation.setResource(resource);
         reservation.setStartTime(start);
         reservation.setEndTime(end);
-        return reservationRepository.save(reservation);
+        Reservation saved = reservationRepository.save(reservation);
+
+        notificationService.notifyStaffOfBooking(saved);   // <-- emit event
+        return saved;
     }
 
-    // Two-level approval. The allowed transition depends on BOTH the actor's role
-    // and the reservation's current stage — a state machine with role guards.
     @Transactional
     public Reservation decide(Long reservationId, String actorEmail, boolean approve) {
         User actor = userRepository.findByEmail(actorEmail)
@@ -64,9 +69,9 @@ public class ReservationService {
 
         if (approve) {
             if (status == ReservationStatus.PENDING_TECH && (role == Role.TECHNICIAN || role == Role.ADMIN)) {
-                r.setStatus(ReservationStatus.PENDING_ADMIN);         // tech stage cleared
+                r.setStatus(ReservationStatus.PENDING_ADMIN);
             } else if (status == ReservationStatus.PENDING_ADMIN && role == Role.ADMIN) {
-                r.setStatus(ReservationStatus.APPROVED);              // final approval
+                r.setStatus(ReservationStatus.APPROVED);
             } else {
                 throw new IllegalStateException("You can't approve this reservation at its current stage.");
             }
@@ -79,6 +84,9 @@ public class ReservationService {
             }
             r.setStatus(ReservationStatus.REJECTED);
         }
-        return reservationRepository.save(r);
+        Reservation saved = reservationRepository.save(r);
+
+        notificationService.notifyStudentOfDecision(saved);   // <-- emit event
+        return saved;
     }
 }

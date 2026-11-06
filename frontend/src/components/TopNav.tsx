@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function TopNav() {
   const router = useRouter();
@@ -20,12 +21,14 @@ export default function TopNav() {
   }, []);
 
   const isStaff = role === "TECHNICIAN" || role === "ADMIN";
+  const isAdmin = role === "ADMIN";
   const links = [
     { href: "/dashboard", label: "Labs" },
     { href: "/resources", label: "Resources" },
     { href: "/reservations", label: "Reservations" },
     ...(isStaff ? [{ href: "/approvals", label: "Approvals" }] : []),
-    ...(role === "ADMIN" ? [{ href: "/users", label: "Users" }] : []),
+    ...(isAdmin ? [{ href: "/manage", label: "Manage" }] : []),
+    ...(isAdmin ? [{ href: "/users", label: "Users" }] : []),
   ];
 
   function signOut() {
@@ -53,6 +56,7 @@ export default function TopNav() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
+          <NotificationBell />
           {role && (
             <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium capitalize text-slate-300">
               {role.toLowerCase()}

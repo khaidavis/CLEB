@@ -34,8 +34,11 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
+                // Admins create/delete labs AND resources (equipment management).
                 .requestMatchers(HttpMethod.POST,   "/api/labs/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/labs/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST,   "/api/resources/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/resources/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/reservations/*/approve", "/api/reservations/*/reject")
                     .hasAnyRole("TECHNICIAN", "ADMIN")
                 .anyRequest().authenticated()
