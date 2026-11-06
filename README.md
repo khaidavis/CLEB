@@ -1,99 +1,77 @@
-# Platform Foundation
+# CLEB — Campus Lab & Equipment Booking
 
-Shared full-stack foundation. Two products are built on top of this same
-skeleton: a personal portfolio site, and the Kaliflower ordering/booking system.
+A secure, full-stack booking platform with role-based approvals and a **concurrency-safe booking engine** that cannot double-book a resource — even under simultaneous requests.
 
-Building the foundation once means auth, database setup, containerization and
-deployment are solved a single time instead of twice.
+Built as a modern rebuild of a Java client-server project, re-architected as a secure web application with the kind of correctness guarantees payment systems depend on.
 
----
-
-## Stack
-
-| Layer     | Technology                       | Why |
-|-----------|----------------------------------|-----|
-| Database  | PostgreSQL 16                    | JSONB for flexible metadata; strong free hosting tiers |
-| Backend   | Spring Boot 3 (Java 21)          | Existing strength — effort goes to hard problems, not syntax |
-| Security  | Spring Security + JWT, RBAC      | Access/refresh token pattern, role-based route protection |
-| Frontend  | Next.js + TypeScript + Tailwind  | Server-side rendering, which matters for a public-facing site |
-| Infra     | Docker Compose                   | One command reproduces the whole environment |
+> **Why this project:** preventing a double-booking under concurrent load is the same class of problem as preventing a double-charge in a payment system. CLEB solves it with a pessimistic database lock inside a transaction — and proves it with a concurrency test.
 
 ---
 
-## Build order
+## Security & Reliability Highlights
 
-Each layer is proven working before the next one starts.
-
-- [x] **Layer 1 — Infrastructure.** Repo structure, Postgres in Docker, env config
-- [ ] **Layer 2 — Backend skeleton.** Spring Boot boots, connects to Postgres, health endpoint responds
-- [ ] **Layer 3 — Data model.** Entities, migrations, seed data
-- [ ] **Layer 4 — Security.** Registration, login, JWT issue/refresh, RBAC
-- [ ] **Layer 5 — Frontend skeleton.** Next.js, API client, auth flow wired up
-- [ ] **Layer 6 — Features.** Diverges here: portfolio vs Kaliflower
-- [ ] **Layer 7 — Tests + CI.** Unit + integration tests, GitHub Actions
-- [ ] **Layer 8 — Deploy.** Live URLs
+- **Concurrency-safe booking.** Reservations acquire a pessimistic row lock (`SELECT … FOR UPDATE`) inside a transaction, so two users booking the same resource at the same instant are serialized — one succeeds, the other gets a clean `409 Conflict`. Verified with a parallel-request test.
+- **Password security.** Passwords are hashed with **BCrypt** (salted, slow by design) and never stored or returned in plaintext.
+- **Stateless JWT authentication.** A custom security filter validates a signed token on every request. No server-side session to steal or scale.
+- **Role-based access control (RBAC).** Three roles — `STUDENT`, `TECHNICIAN`, `ADMIN` — enforced server-side on every protected route.
+- **Privilege-escalation prevention.** Public sign-ups are always created as `STUDENT`; the server ignores any role supplied by the client. Elevated roles are granted only by an admin.
+- **Defense in depth.** The approval workflow is enforced in two independent layers — the HTTP security rules *and* the service logic.
+- **No data leakage.** Responses use DTOs, never raw entities, so internal fields like the password hash can never be serialized out.
 
 ---
 
-## Getting started
+## Features
 
-Requires Docker Desktop.
+- **Authentication** — register, log in, JWT-secured sessions.
+- **Booking** — students reserve labs and equipment; conflicts are rejected atomically.
+- **Two-level approval workflow** — a reservation moves `PENDING_TECH → PENDING_ADMIN → APPROVED` (or `REJECTED`), each transition gated to the right role. Modeled as a state machine.
+- **Event-driven notifications** — a new booking notifies technicians and admins; an approval decision notifies the student. In-app bell with unread count.
+- **Admin tools** — manage labs and equipment, and promote users to technician or admin.
+- **Role-aware UI** — the interface adapts to the signed-in user's role.
+
+---
+
+## Tech Stack
+
+| Layer     | Technology                                      |
+|-----------|-------------------------------------------------|
+| Frontend  | Next.js (App Router), TypeScript, Tailwind CSS  |
+| Backend   | Spring Boot 3, Java 21                           |
+| Security  | Spring Security, JWT (jjwt), BCrypt, RBAC        |
+| Database  | PostgreSQL 16 (Spring Data JPA / Hibernate)     |
+| Infra     | Docker Compose
+
+The backend is the only tier that touches the database. Every protected request must carry a valid JWT; a filter authenticates it and role rules authorize it before any controller runs. Business logic (booking rules, the approval state machine, the transactional lock) lives in a service layer between the controllers and the repositories.
+
+---
+
+## Running locally
+
+**Prerequisites:** Docker Desktop, Java 21+, Node 18+
 
 ```bash
-# 1. Create your local environment file from the template
+git clone https://github.com/khaidavis/CLEB.git
+cd CLEB
 cp .env.example .env
-
-# 2. Edit .env and set real values.
-#    Generate a strong secret with:  openssl rand -base64 48
-
-# 3. Start the stack
-docker compose up -d
-
-# 4. Confirm the database is healthy
-docker compose ps
+docker compose up -d        # PostgreSQL on :5432, Adminer UI on :8081
+cd backend && ./mvnw spring-boot:run      # http://localhost:8080
+# in a new terminal:
+cd frontend && npm install && npm run dev # http://localhost:3000
 ```
 
-Then open **http://localhost:8081** for Adminer and sign in with:
-
-| Field    | Value                             |
-|----------|-----------------------------------|
-| System   | PostgreSQL                        |
-| Server   | `db`  ← the container name, not `localhost` |
-| Username | whatever you set as `POSTGRES_USER` |
-| Password | whatever you set as `POSTGRES_PASSWORD` |
-| Database | whatever you set as `POSTGRES_DB`   |
-
-Seeing the database listed means Layer 1 is done.
-
-### Useful commands
-
-```bash
-docker compose logs -f db     # follow database logs
-docker compose down           # stop, keep data
-docker compose down -v        # stop and DELETE all data
-docker compose ps             # what is running, and is it healthy
-```
+Open **http://localhost:3000**, register an account, and start booking.
 
 ---
 
-## Repository layout
+## Roadmap
 
-```
-portfolio-platform/
-├── docker-compose.yml    # local stack definition
-├── .env.example          # config template (committed)
-├── .env                  # real secrets (never committed)
-├── .gitignore
-├── backend/              # Spring Boot service
-├── frontend/             # Next.js application
-├── infra/                # deployment config, CI workflows
-└── docs/                 # architecture notes, ERD, decision records
-```
+- Automated tests (unit + integration), including a test that proves the double-booking lock, run in CI via GitHub Actions.
+- Live deployment (managed Postgres + backend, frontend on a CDN host).
+- Externalize remaining configuration fully to environment variables.
 
 ---
 
-## Conventions
+## Author
 
-- Secrets live in `.env` only, never in source or in `docker-compose.yml`
-- Inside the Docker network, services reach the database at host `db` — not `localhost`
-- Every architectural decision gets a short note in `docs/` explaining the *why*
+**Khaliyah Davis** — [@khaidavis](https://github.com/khaidavis)
+B.Sc. Computing, University of Technology, Jamaica · Full-Stack Developer | Backend & Security
