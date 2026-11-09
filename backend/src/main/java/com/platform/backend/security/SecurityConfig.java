@@ -1,5 +1,6 @@
 package com.platform.backend.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -22,6 +23,11 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
 
+    // The allowed frontend origin comes from the environment in the cloud,
+    // defaulting to the local dev server.
+    @Value("${FRONTEND_ORIGIN:http://localhost:3000}")
+    private String frontendOrigin;
+
     public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
     }
@@ -34,7 +40,6 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/auth/register").permitAll()
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
-                // Admins create/delete labs AND resources (equipment management).
                 .requestMatchers(HttpMethod.POST,   "/api/labs/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/labs/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST,   "/api/resources/**").hasRole("ADMIN")
@@ -54,7 +59,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
+        config.setAllowedOrigins(List.of(frontendOrigin));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
